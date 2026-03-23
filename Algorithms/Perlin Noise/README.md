@@ -53,6 +53,8 @@ int main()
 #include "bmp.h"
 #include "perlin.h"
 
+#include <assert.h>
+
 int main()
 {
     BmpBuffer bmpBuffer = { 0 };
