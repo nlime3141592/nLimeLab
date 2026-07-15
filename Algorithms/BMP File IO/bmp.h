@@ -1,10 +1,13 @@
-﻿#pragma once
+#ifndef __BMP_H__
+#define __BMP_H__
 
 #include <stdint.h>
 #include <stdio.h>
 
 #define SIZE_BMP_FILE_HEADER 14
 #define SIZE_BMP_INFO_HEADER 40
+
+#pragma pack(push, 1)
 
 // 14 bytes
 typedef struct _BmpFileHeader
@@ -32,26 +35,55 @@ typedef struct _BmpInfoHeader
     uint32_t biClrImportant; // 0
 } BmpInfoHeader;
 
+typedef struct _BmpHeader
+{
+    BmpFileHeader file;
+    BmpInfoHeader info;
+} BmpHeader;
+
+#pragma pack(pop)
+
 typedef struct _BmpRgb
 {
-    uint8_t rgbBlue;
-    uint8_t rgbGreen;
-    uint8_t rgbRed;
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
 } BmpRgb;
 
-typedef struct _BmpBuffer
+typedef struct _BmpGray
 {
-    BmpFileHeader bmpFileHeader;
-    BmpInfoHeader bmpInfoHeader;
+    uint8_t gray;
+} BmpGray;
+
+typedef struct _Bmp
+{
+    BmpHeader header;
     FILE* fp;
     uint8_t* data;
-} BmpBuffer;
+} Bmp;
 
-int CreateBmp(BmpBuffer* buffer, const char* fileName, int32_t w, int32_t h);
-int OpenBmp(BmpBuffer* buffer, const char* fileName);
-int CloseBmp(BmpBuffer* buffer);
+int TryCreateBmp(Bmp* outBmp, const char* path, int32_t w, int32_t h);
+int TryOpenBmp(Bmp* outBmp, const char* path);
+int TryCloseBmp(Bmp* pBmp);
 
-int WriteBmp(BmpBuffer* buffer);
-int SetPixel(BmpBuffer* buffer, BmpRgb* rgb, int32_t w, int32_t h);
-int GetPixel(BmpBuffer* buffer, BmpRgb* rgb, int32_t w, int32_t h);
-int SetPixelGrayscale(BmpBuffer* buffer, uint8_t grayscale, int32_t w, int32_t h);
+int SetGrayP(Bmp* pBmp, BmpGray* pGray, int32_t w, int32_t h);
+int SetGray(Bmp* pBmp, BmpGray gray, int32_t w, int32_t h);
+int SetGrayByte(Bmp* pBmp, uint8_t gray, int32_t w, int32_t h);
+int SetRgbP(Bmp* pBmp, BmpRgb* pRgb, int32_t w, int32_t h);
+int SetRgb(Bmp* pBmp, BmpRgb rgb, int32_t w, int32_t h);
+int SetRgbByte(Bmp* pBmp, uint8_t r, uint8_t g, uint8_t b, int32_t w, int32_t h);
+
+int SetR(Bmp* pBmp, uint8_t r, int32_t w, int32_t h);
+int SetG(Bmp* pBmp, uint8_t g, int32_t w, int32_t h);
+int SetB(Bmp* pBmp, uint8_t b, int32_t w, int32_t h);
+
+int GetR(Bmp* pBmp, uint8_t* outR, int32_t w, int32_t h);
+int GetG(Bmp* pBmp, uint8_t* outG, int32_t w, int32_t h);
+int GetB(Bmp* pBmp, uint8_t* outB, int32_t w, int32_t h);
+int GetGrayByte(Bmp* pBmp, uint8_t* outGray, int32_t w, int32_t h);
+int GetGray(Bmp* pBmp, BmpGray* outGray, int32_t w, int32_t h);
+int GetRgb(Bmp* pBmp, BmpRgb* outRgb, int32_t w, int32_t h);
+
+int Commit(Bmp* pBmp);
+
+#endif

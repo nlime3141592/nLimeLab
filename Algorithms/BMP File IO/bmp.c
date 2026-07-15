@@ -1,199 +1,247 @@
-﻿#include "bmp.h"
+#include "bmp.h"
 
 #include <assert.h>
 #include <stdlib.h>
 
-//
-// TODO: 오류 처리가 필요한 경우 수행합니다.
-//
-
-static void WriteBmpFileHeader(BmpFileHeader* header, FILE* fp)
-{
-    fwrite(&header->bfType, sizeof(header->bfType), 1, fp);
-    fwrite(&header->bfSize, sizeof(header->bfSize), 1, fp);
-    fwrite(&header->bfReserved1, sizeof(header->bfReserved1), 1, fp);
-    fwrite(&header->bfReserved2, sizeof(header->bfReserved2), 1, fp);
-    fwrite(&header->bfOffBits, sizeof(header->bfOffBits), 1, fp);
-}
-
-static void WriteBmpInfoHeader(BmpInfoHeader* header, FILE* fp)
-{
-    fwrite(&header->biSize, sizeof(header->biSize), 1, fp);
-    fwrite(&header->biWidth, sizeof(header->biWidth), 1, fp);
-    fwrite(&header->biHeight, sizeof(header->biHeight), 1, fp);
-    fwrite(&header->biPlanes, sizeof(header->biPlanes), 1, fp);
-    fwrite(&header->biBitCount, sizeof(header->biBitCount), 1, fp);
-    fwrite(&header->biCompression, sizeof(header->biCompression), 1, fp);
-    fwrite(&header->biSizeImage, sizeof(header->biSizeImage), 1, fp);
-    fwrite(&header->biXPelsPerMeter, sizeof(header->biXPelsPerMeter), 1, fp);
-    fwrite(&header->biYPelsPerMeter, sizeof(header->biYPelsPerMeter), 1, fp);
-    fwrite(&header->biClrUsed, sizeof(header->biClrUsed), 1, fp);
-    fwrite(&header->biClrImportant, sizeof(header->biClrImportant), 1, fp);
-}
-
-static void ReadBmpFileHeader(BmpFileHeader* header, FILE* fp)
-{
-    fread(&header->bfType, sizeof(header->bfType), 1, fp);
-    fread(&header->bfSize, sizeof(header->bfSize), 1, fp);
-    fread(&header->bfReserved1, sizeof(header->bfReserved1), 1, fp);
-    fread(&header->bfReserved2, sizeof(header->bfReserved2), 1, fp);
-    fread(&header->bfOffBits, sizeof(header->bfOffBits), 1, fp);
-}
-
-static void ReadBmpInfoHeader(BmpInfoHeader* header, FILE* fp)
-{
-    fread(&header->biSize, sizeof(header->biSize), 1, fp);
-    fread(&header->biWidth, sizeof(header->biWidth), 1, fp);
-    fread(&header->biHeight, sizeof(header->biHeight), 1, fp);
-    fread(&header->biPlanes, sizeof(header->biPlanes), 1, fp);
-    fread(&header->biBitCount, sizeof(header->biBitCount), 1, fp);
-    fread(&header->biCompression, sizeof(header->biCompression), 1, fp);
-    fread(&header->biSizeImage, sizeof(header->biSizeImage), 1, fp);
-    fread(&header->biXPelsPerMeter, sizeof(header->biXPelsPerMeter), 1, fp);
-    fread(&header->biYPelsPerMeter, sizeof(header->biYPelsPerMeter), 1, fp);
-    fread(&header->biClrUsed, sizeof(header->biClrUsed), 1, fp);
-    fread(&header->biClrImportant, sizeof(header->biClrImportant), 1, fp);
-}
-
-int CreateBmp(BmpBuffer* buffer, const char* fileName, int32_t w, int32_t h)
+int TryCreateBmp(Bmp* outBmp, const char* path, int32_t w, int32_t h)
 {
     // NOTE: https://medium.com/@chiaracoetzee/maximum-resolution-of-bmp-image-file-8c729b3f833a
     assert(w > 0 && w < 23170);
     assert(h > 0 && h < 23170);
 
-    BmpFileHeader bmpFileHeader;
-    BmpInfoHeader bmpInfoHeader;
+    BmpHeader header;
 
-    bmpFileHeader.bfType = 0x4D42;
-    bmpFileHeader.bfSize = 0; // NOTE: The field will set on next step.
-    bmpFileHeader.bfReserved1 = 0;
-    bmpFileHeader.bfReserved2 = 0;
-    bmpFileHeader.bfOffBits = SIZE_BMP_FILE_HEADER + SIZE_BMP_INFO_HEADER;
+    header.file.bfType = 0x4D42;
+    header.file.bfSize = 0; // NOTE: The field will set on next step.
+    header.file.bfReserved1 = 0;
+    header.file.bfReserved2 = 0;
+    header.file.bfOffBits = SIZE_BMP_FILE_HEADER + SIZE_BMP_INFO_HEADER;
 
-    bmpInfoHeader.biSize = SIZE_BMP_INFO_HEADER;
-    bmpInfoHeader.biWidth = w;
-    bmpInfoHeader.biHeight = h;
-    bmpInfoHeader.biPlanes = 1;
-    bmpInfoHeader.biBitCount = 24;
-    bmpInfoHeader.biCompression = 0;
-    bmpInfoHeader.biSizeImage = 0; // NOTE: The field will set on next step.
-    bmpInfoHeader.biXPelsPerMeter = 100;
-    bmpInfoHeader.biYPelsPerMeter = 100;
-    bmpInfoHeader.biClrUsed = 0;
-    bmpInfoHeader.biClrImportant = 0;
+    header.info.biSize = SIZE_BMP_INFO_HEADER;
+    header.info.biWidth = w;
+    header.info.biHeight = h;
+    header.info.biPlanes = 1;
+    header.info.biBitCount = 24;
+    header.info.biCompression = 0;
+    header.info.biSizeImage = 0; // NOTE: The field will set on next step.
+    header.info.biXPelsPerMeter = 100;
+    header.info.biYPelsPerMeter = 100;
+    header.info.biClrUsed = 0;
+    header.info.biClrImportant = 0;
 
-    int32_t wBytes = ((w * 3) & 0xFFFFFFFC) + 4;
+    int32_t wBytes = ((w * 3) + 3) & ~3;
     int32_t hBytes = h;
 
-    bmpInfoHeader.biSizeImage = wBytes * hBytes;
-    bmpFileHeader.bfSize = bmpFileHeader.bfOffBits + bmpInfoHeader.biSizeImage;
+    header.info.biSizeImage = wBytes * hBytes;
+    header.file.bfSize = header.file.bfOffBits + header.info.biSizeImage;
 
-    FILE* fp = fopen(fileName, "wb+");
+    FILE* fp = fopen(path, "wb+");
 
-    WriteBmpFileHeader(&bmpFileHeader, fp);
-    WriteBmpInfoHeader(&bmpInfoHeader, fp);
+    fwrite(&header, sizeof(BmpHeader), 1, fp);
+    fseek(fp, header.file.bfSize - 1, SEEK_SET);
+    fputc(0, fp);
 
-    // initialize file size.
-    fpos_t position = bmpFileHeader.bfSize - 1;
-    char tmpBuffer = 0;
-
-    int err = fsetpos(fp, &position);
-
-    fwrite(&tmpBuffer, 1, 1, fp);
-
-    buffer->bmpFileHeader = bmpFileHeader;
-    buffer->bmpInfoHeader = bmpInfoHeader;
-    buffer->fp = fp;
-    buffer->data = (uint8_t*)malloc(3 * w * h);
+    outBmp->header = header;
+    outBmp->fp = fp;
+    outBmp->data = (uint8_t*)calloc(3 * w * h, sizeof(uint8_t));
 
     return 0;
 }
 
-int OpenBmp(BmpBuffer* buffer, const char* fileName)
+int TryOpenBmp(Bmp* outBmp, const char* path)
 {
-    FILE* fp = fopen(fileName, "rb+");
+    BmpHeader header;
 
-    BmpFileHeader bmpFileHeader;
-    BmpInfoHeader bmpInfoHeader;
+    FILE* fp = fopen(path, "rb+");
 
-    ReadBmpFileHeader(&bmpFileHeader, fp);
-    ReadBmpInfoHeader(&bmpInfoHeader, fp);
+    fread(&header, sizeof(BmpHeader), 1, fp);
 
-    buffer->bmpFileHeader = bmpFileHeader;
-    buffer->bmpInfoHeader = bmpInfoHeader;
-    buffer->fp = fp;
-    buffer->data = (uint8_t*)malloc(3 * bmpInfoHeader.biWidth * bmpInfoHeader.biHeight);
+    int w = header.info.biWidth;
+    int h = header.info.biHeight;
+    int32_t wBytes = ((w * 3) + 3) & ~3;
+    int32_t hBytes = h;
 
-    return 0;
-}
+    outBmp->header = header;
+    outBmp->fp = fp;
+    outBmp->data = (uint8_t*)malloc(3 * w * h);
 
-int CloseBmp(BmpBuffer* buffer)
-{
-    WriteBmp(buffer);
+    int32_t padding = wBytes - (w * 3);
+    int32_t base = 0;
 
-    fclose(buffer->fp);
-    free(buffer->data);
-
-    BmpFileHeader bmpFileHeader = { 0 };
-    BmpInfoHeader bmpInfoHeader = { 0 };
-
-    buffer->bmpFileHeader = bmpFileHeader;
-    buffer->bmpInfoHeader = bmpInfoHeader;
-    buffer->fp = NULL;
-    buffer->data = NULL;
-
-    return 0;
-}
-
-int WriteBmp(BmpBuffer* buffer)
-{
-    fseek(buffer->fp, 0, SEEK_SET);
-
-    WriteBmpFileHeader(&buffer->bmpFileHeader, buffer->fp);
-    WriteBmpInfoHeader(&buffer->bmpInfoHeader, buffer->fp);
-
-    int32_t w = buffer->bmpInfoHeader.biWidth;
-    int32_t r = (4 - ((w * 3) & 0x00000003)) % 4;
-    int32_t tmpBuffer = 0;
-
-    for (int32_t h = 0; h < buffer->bmpInfoHeader.biHeight; ++h)
+    for (int y = 0; y < h; ++y)
     {
-        fwrite(&buffer->data[3 * w * h], 3 * w, 1, buffer->fp);
-        fwrite(&tmpBuffer, 1, r, buffer->fp);
+        fread((outBmp->data + base), sizeof(uint8_t), w * 3, fp);
+        fseek(fp, padding, SEEK_CUR);
+        base += (w * 3);
     }
 
     return 0;
 }
 
-int SetPixel(BmpBuffer* buffer, BmpRgb* rgb, int32_t w, int32_t h)
+int TryCloseBmp(Bmp* pBmp)
 {
-    int32_t i = 3 * (buffer->bmpInfoHeader.biWidth * h + w);
+    fclose(pBmp->fp);
+    free(pBmp->data);
 
-    buffer->data[i] = rgb->rgbBlue;
-    buffer->data[i + 1] = rgb->rgbGreen;
-    buffer->data[i + 2] = rgb->rgbRed;
+    pBmp->header = (BmpHeader){ 0 };
+    pBmp->fp = NULL;
+    pBmp->data = NULL;
 
     return 0;
 }
 
-int GetPixel(BmpBuffer* buffer, BmpRgb* rgb, int32_t w, int32_t h)
+int SetGrayP(Bmp* pBmp, BmpGray* pGray, int32_t w, int32_t h)
 {
-    int32_t i = 3 * (buffer->bmpInfoHeader.biWidth * h + w);
-
-    rgb->rgbBlue = buffer->data[i];
-    rgb->rgbGreen = buffer->data[i + 1];
-    rgb->rgbRed = buffer->data[i + 2];
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    pBmp->data[base] = pGray->gray;
+    pBmp->data[base + 1] = pGray->gray;
+    pBmp->data[base + 2] = pGray->gray;
 
     return 0;
 }
 
-int SetPixelGrayscale(BmpBuffer* buffer, uint8_t grayscale, int32_t w, int32_t h)
+int SetGray(Bmp* pBmp, BmpGray gray, int32_t w, int32_t h)
 {
-    BmpRgb rgb;
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    pBmp->data[base] = gray.gray;
+    pBmp->data[base + 1] = gray.gray;
+    pBmp->data[base + 2] = gray.gray;
 
-    rgb.rgbBlue = grayscale;
-    rgb.rgbGreen = grayscale;
-    rgb.rgbRed = grayscale;
+    return 0;
+}
 
-    SetPixel(buffer, &rgb, w, h);
+int SetGrayByte(Bmp* pBmp, uint8_t gray, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    pBmp->data[base] = gray;
+    pBmp->data[base + 1] = gray;
+    pBmp->data[base + 2] = gray;
+
+    return 0;
+}
+
+int SetRgbP(Bmp* pBmp, BmpRgb* pRgb, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    pBmp->data[base] = pRgb->b;
+    pBmp->data[base + 1] = pRgb->g;
+    pBmp->data[base + 2] = pRgb->r;
+
+    return 0;
+}
+
+int SetRgb(Bmp* pBmp, BmpRgb rgb, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    pBmp->data[base] = rgb.b;
+    pBmp->data[base + 1] = rgb.g;
+    pBmp->data[base + 2] = rgb.r;
+
+    return 0;
+}
+
+int SetRgbByte(Bmp* pBmp, uint8_t r, uint8_t g, uint8_t b, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    pBmp->data[base] = b;
+    pBmp->data[base + 1] = g;
+    pBmp->data[base + 2] = r;
+    
+    return 0;
+}
+
+int SetR(Bmp* pBmp, uint8_t r, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    pBmp->data[base + 2] = r;
+
+    return 0;
+}
+
+int SetG(Bmp* pBmp, uint8_t g, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    pBmp->data[base + 1] = g;
+
+    return 0;
+}
+
+int SetB(Bmp* pBmp, uint8_t b, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    pBmp->data[base] = b;
+
+    return 0;
+}
+
+int GetR(Bmp* pBmp, uint8_t* outR, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    *outR = pBmp->data[base + 2];
+
+    return 0;
+}
+
+int GetG(Bmp* pBmp, uint8_t* outG, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    *outG = pBmp->data[base + 1];
+    
+    return 0;
+}
+
+int GetB(Bmp* pBmp, uint8_t* outB, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    *outB = pBmp->data[base];
+    
+    return 0;
+}
+
+int GetGrayByte(Bmp* pBmp, uint8_t* outGray, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    *outGray = pBmp->data[base + 2];
+    
+    return 0;
+}
+
+int GetGray(Bmp* pBmp, BmpGray* outGray, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    outGray->gray = pBmp->data[base + 2];
+
+    return 0;
+}
+
+int GetRgb(Bmp* pBmp, BmpRgb* outRgb, int32_t w, int32_t h)
+{
+    int32_t base = (w + h * pBmp->header.info.biWidth) * 3;
+    outRgb->b = pBmp->data[base];
+    outRgb->g = pBmp->data[base + 1];
+    outRgb->r = pBmp->data[base + 2];
+
+    return 0;
+}
+
+int Commit(Bmp* pBmp)
+{
+    int w = pBmp->header.info.biWidth;
+    int h = pBmp->header.info.biHeight;
+    int32_t wBytes = ((w * 3) + 3) & ~3;
+    int32_t hBytes = h;
+    int32_t padding = wBytes - (w * 3);
+    char pad[4] = { 0, 0, 0, 0 };
+
+    fseek(pBmp->fp, pBmp->header.file.bfOffBits, SEEK_SET);
+    int32_t base = 0;
+
+    for (int32_t y = 0; y < hBytes; ++y)
+    {
+        fwrite((pBmp->data + base), sizeof(uint8_t), w * 3, pBmp->fp);
+        fwrite(pad, sizeof(uint8_t), padding, pBmp->fp);
+        base += (w * 3);
+    }
+
+    return 0;
 }
