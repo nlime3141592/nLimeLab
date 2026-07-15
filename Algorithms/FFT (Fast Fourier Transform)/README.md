@@ -4,6 +4,10 @@
 - 고속푸리에변환
 - 쿨리-튜키 분할 방식으로 구현된 이산푸리에변환 알고리즘 포함
 
+## Result Image
+
+![](https://github.com/nlime3141592/nLimeLab/blob/main/Algorithms/FFT%20(Fast%20Fourier%20Transform)/result-FFT.png?raw=true)
+
 ## Usage
 
 - [BMP 코드 참조](https://github.com/nlime3141592/nLimeLab/tree/main/Algorithms/BMP%20File%20IO)
